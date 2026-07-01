@@ -1,0 +1,68 @@
+name: Debug ? Latest Commit Report
+
+on:
+  schedule:
+    - cron: '7,17,27,37,47,57 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  report-latest-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout default branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Gather commit metadata
+        id: commit
+        run: |
+          {
+            echo "sha=$(git rev-parse HEAD)"
+            echo "sha_short=$(git rev-parse --short HEAD)"
+            echo "author=$(git log -1 --format='%an <%ae>')"
+            echo "date=$(git log -1 --format='%ci')"
+            echo "message<<__EOF__"
+            git log -1 --format='%B'
+            echo "__EOF__"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Ensure debug label exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh label create debug \
+            --description "Temporary debug artefact" \
+            --color "e4e669" \
+            --repo "${{ github.repository }}" \
+          || true  # idempotent ? label may already exist
+
+      - name: Create issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue create \
+            --repo "${{ github.repository }}" \
+            --title "? Debug: latest commit on \`${{ github.ref_name }}\` ($(date -u '+%Y-%m-%d %H:%M UTC'))" \
+            --label "debug" \
+            --body "## Latest commit on \`${{ github.ref_name }}\`
+
+          | Field   | Value |
+          |---------|-------|
+          | SHA     | [\`${{ steps.commit.outputs.sha_short }}\`](${{ github.server_url }}/${{ github.repository }}/commit/${{ steps.commit.outputs.sha }}) |
+          | Author  | ${{ steps.commit.outputs.author }} |
+          | Date    | ${{ steps.commit.outputs.date }} |
+          | Trigger | ${{ github.event_name }} |
+
+          ### Commit message
+
+          \`\`\`
+          ${{ steps.commit.outputs.message }}
+          \`\`\`
+
+          ---
+          [Workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) � Generated every 30 min � Close when debugging is complete."
