@@ -3,7 +3,7 @@ name: Debug ? Latest Commit Report
 on:
   schedule:
     - cron: '7,17,27,37,47,57 * * * *'
-    - timezone: "Europe/Oslo"
+      timezone: "Europe/Oslo"
   workflow_dispatch:
 
 permissions:
